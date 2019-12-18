@@ -1,0 +1,96 @@
+# C) LINEAR AND MIP
+
+# El problema consiste en asignar tres productos a cuatro operadores.
+# Cada operador tiene un tiempo diferente (en horas) para terminar cada producto
+# esto se detalla en la tabla tiempos.
+# Cada operador tiene un numero minimo y maximo de horas (dentro de tres jornadas de 8 horas)
+# La demanda para cada producto se especifica en la tabla demanda.
+# La funcion objetivo consiste en minimizar el tiempo total utilizado por los operadores
+
+
+import numpy as np
+import pulp
+import pandas as pd
+
+
+# Creacion del modelo
+model = pulp.LpProblem('Minimizing_Operator_Time', pulp.LpMinimize)
+
+# Cargamos los datos de los tiempos por operadore por producto (en horas). El diccionario data1 es solo auxiliar
+
+data1 = {'operadores':['Carlos','Carlos','Carlos','Marco','Marco','Marco'
+                            ,'Luis','Luis','Luis','Oscar','Oscar','Oscar'],
+          'productos':['camisa','pantalon','polera','camisa','pantalon','polera',
+                           'camisa','pantalon','polera', 'camisa','pantalon','polera'],
+           'tiempos': [1.0, 0.8 ,0.8, 1.0, 0.7, 0.6, 0.9, 0.6, 0.6, 0.5, 0.6, 0.9]}
+tiempos =pd.DataFrame(data1)
+tiempos=tiempos.set_index(['operadores', 'productos'])
+
+
+# Cargamos los datos del tiempo minimo y maximo de trabajo por operador. El dic Data2 es solo auxiliar
+data2 = {'operadores':['Carlos','Marco','Luis','Oscar'],
+           'tiempo_min':[8,8,8,8],
+           'tiempo_max': [24,24,16,16]}
+operadores_tmax_tmin =pd.DataFrame(data2)
+operadores_tmax_tmin = operadores_tmax_tmin.set_index(['operadores'])
+
+
+# Cargamos los datos de la demanda (en unidades) para los siguientes tres dias
+data3 = {'productos':['camisa','pantalon','polera'],
+           'demanda':[23,35,14]}
+demanda = pd.DataFrame(data3)
+demanda = demanda.set_index(['productos'])
+
+
+
+# Creacion de las variables enteras
+productos = ['camisa', 'pantalon', 'polera']
+operadores = ['Carlos', 'Marco', 'Luis', 'Oscar']
+
+prod_ope_cant = pulp.LpVariable.dicts(
+        'prod_ope_cant',
+        ((i,j) for i in operadores for j in productos),
+        lowBound = 0,
+        cat='Integer'
+                    )
+
+# Funcion objetivo
+model += pulp.lpSum(
+                    [prod_ope_cant[operador,producto]*tiempos.loc[(operador,producto),'tiempos'] for operador,producto in tiempos.index]
+                    )
+
+# El tiempo minimo de cada trabajador
+for operador in operadores:
+    model += pulp.lpSum(
+                    [prod_ope_cant[operador, producto] for producto in productos]
+                    ) >= operadores_tmax_tmin.loc[operador,'tiempo_min']
+    
+# El tiempo maximo de cada trabajador
+for operador in operadores:
+    model += pulp.lpSum(
+                    [prod_ope_cant[operador, producto] for producto in productos]
+                    ) <= operadores_tmax_tmin.loc[operador,'tiempo_max']
+    
+# La demanda para estos tres dias
+for producto in productos:
+    model += pulp.lpSum(
+                    [prod_ope_cant[operador, producto] for operador in operadores]
+                    ) == demanda.loc[producto,'demanda']
+
+# La solucion del modelo
+model.solve()
+
+print('El estado del modelo: ', pulp.LpStatus[model.status])
+print('')
+print('El valor de las variables:')
+for variable in model.variables():
+    print(variable.name, '=', variable.varValue, 'pzas')
+
+print('')
+print ('El valor de la funcion objetivo = ', pulp.value(model.objective), ' [horas]')
+
+
+##*****  RESULTADOS *****
+
+# El resultado alcanzado por el modelo es el optimo
+# El valor minimo alcanzado es de 42 horas.
